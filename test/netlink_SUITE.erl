@@ -8,10 +8,28 @@
 %%%-------------------------------------------------------------------
 -module(netlink_SUITE).
 
--compile(export_all).
-
 -include_lib("common_test/include/ct.hrl").
 -include("../include/netlink.hrl").
+
+-export([
+    all/0,
+    suite/0,
+    init_per_suite/1,
+    end_per_suite/1,
+
+    test_conntrack_new/1,
+    test_rt_newneigh_1/1, test_rt_newneigh_2/1, test_rt_delroute/1,
+    test_rt_newprefix/1,
+    test_rt_newlink_1/1, test_rt_newlink_2/1,
+    test_rt_linkinfo_1/1, test_rt_linkinfo_vxlan/1, test_rt_linkinfo_complex/1,
+    test_nfq_unbind/1, test_nfq_bind_queue/1,
+    test_nfq_bind_socket/1, test_nfq_set_copy_mode/1,
+    test_nfq_set_verdict/1,
+    test_nft_requests/1,
+    test_genl/1, test_ipvs/1,
+    test_tcp_metrics_get_enc/1, test_tcp_metrics_get_rsp_dec/1,
+    test_if_nametoindex/1
+]).
 
 -define(equal(Expected, Actual),
     (fun (Expected@@@, Expected@@@) -> true;
@@ -228,40 +246,40 @@ rt_linkinfo_complex() ->
 
 nfq_unbind() ->
     <<28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0,1,0,4,0,0,2>>.
-nfq_unbind_answer() ->
-    <<36,0,0,0,2,0,0,0,0,0,0,0,174,4,0,0,0,0,0,0,28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
+% nfq_unbind_answer() ->
+%     <<36,0,0,0,2,0,0,0,0,0,0,0,174,4,0,0,0,0,0,0,28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
 
 nfq_bind_queue() ->
     <<28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0,1,0,3,0,0,2>>.
 
-nfq_bind_queue_answer() ->
-    <<36,0,0,0,2,0,0,0,0,0,0,0,189,4,0,0,0,0,0,0,28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
+% nfq_bind_queue_answer() ->
+%     <<36,0,0,0,2,0,0,0,0,0,0,0,189,4,0,0,0,0,0,0,28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
 
 nfq_bind_socket() ->
     <<28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0,1,0,1,0,0,0>>.
 
-nfq_bind_socket_answer() ->
-    <<36,0,0,0,2,0,0,0,0,0,0,0,189,4,0,0,0,0,0,0,28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
+% nfq_bind_socket_answer() ->
+%     <<36,0,0,0,2,0,0,0,0,0,0,0,189,4,0,0,0,0,0,0,28,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
 
 nfq_set_copy_mode() ->
     <<32,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0,0,0,0,0,9,0,2,0,0,0,255,255,2,0,0,0>>.
 
-nfq_set_copy_mode_answer() ->
-    <<36,0,0,0,2,0,0,0,0,0,0,0,189,4,0,0,0,0,0,0,32,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
+% nfq_set_copy_mode_answer() ->
+%     <<36,0,0,0,2,0,0,0,0,0,0,0,189,4,0,0,0,0,0,0,32,0,0,0,2,3,5,0,0,0,0,0,0,0,0,0>>.
 
 nfq_set_verdict() ->
     <<32,0,0,0,1,3,1,0,0,0,0,0,0,0,0,0,0,0,0,0,12,0,2,0,0,0,0,1,0,0,0,1>>.
 
-nfq_packet() ->
-    <<176,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,2,0,0,0,11,0,1,0,0,0,
-      0,1,8,0,0,0,8,0,5,0,0,0,0,11,8,0,3,0,8,12,0,0,16,0,9,0,
-      0,6,0,0,0,80,86,150,196,3,0,0,20,0,4,0,0,0,0,0,85,167,
-      197,137,0,0,0,0,0,10,209,138,92,0,10,0,69,192,0,88,87,
-      34,0,0,1,89,213,56,172,28,0,17,224,0,0,5,2,1,0,52,172,
-      28,0,17,0,0,0,0,0,0,0,2,0,0,1,16,0,7,94,156,255,255,255,
-      0,0,10,2,1,0,0,0,40,172,28,0,17,172,28,0,32,10,0,0,1,
-      172,28,0,16,231,148,79,84,211,63,84,12,100,46,35,199,
-      185,157,63,9>>.
+% nfq_packet() ->
+%     <<176,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,2,0,0,0,11,0,1,0,0,0,
+%       0,1,8,0,0,0,8,0,5,0,0,0,0,11,8,0,3,0,8,12,0,0,16,0,9,0,
+%       0,6,0,0,0,80,86,150,196,3,0,0,20,0,4,0,0,0,0,0,85,167,
+%       197,137,0,0,0,0,0,10,209,138,92,0,10,0,69,192,0,88,87,
+%       34,0,0,1,89,213,56,172,28,0,17,224,0,0,5,2,1,0,52,172,
+%       28,0,17,0,0,0,0,0,0,0,2,0,0,1,16,0,7,94,156,255,255,255,
+%       0,0,10,2,1,0,0,0,40,172,28,0,17,172,28,0,32,10,0,0,1,
+%       172,28,0,16,231,148,79,84,211,63,84,12,100,46,35,199,
+%       185,157,63,9>>.
 
 nft_requests() ->
     [<<16#14, 16#00, 16#00, 16#00, 16#10, 16#00, 16#01, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00, 16#00,
@@ -579,13 +597,16 @@ test_tcp_metrics_get_rsp_dec(_Config) ->
     [{netlink,tcp_metrics, [multi], 18,31595, {get,1,0,Attrs}} | _Rest] = Data.
 
 test_if_nametoindex(_Config) ->
-    {ok, FdList0} = file:list_dir("/proc/self/fd"),
-    {ok, 1} = gen_netlink_client:if_nametoindex("lo"),
-    {ok, FdList0} = file:list_dir("/proc/self/fd"),
-    {error, _} = gen_netlink_client:if_nametoindex("badifname_over_13_chars"),
-    {error, _} = gen_netlink_client:if_nametoindex("not_an_if"),
-    {ok, FdList0} = file:list_dir("/proc/self/fd").
-
+    try
+        {ok, FdList0} = file:list_dir("/proc/self/fd"),
+        {ok, 1} = gen_netlink_client:if_nametoindex("lo"),
+        {ok, FdList0} = file:list_dir("/proc/self/fd"),
+        {error, _} = gen_netlink_client:if_nametoindex("badifname_over_13_chars"),
+        {error, _} = gen_netlink_client:if_nametoindex("not_an_if"),
+        {ok, FdList0} = file:list_dir("/proc/self/fd")
+    catch error:{badmatch, {error, enoent}} ->
+        {skip, enoent}
+    end.
 
 all() ->
     [test_conntrack_new,
