@@ -13,10 +13,6 @@ a recent gen_socket is required.
 BUILDING
 --------
 
-Using tetrapak:
-
-    # tetrapak build check
-
 Using rebar:
 
     # rebar get-deps
