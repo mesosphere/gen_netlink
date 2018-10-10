@@ -45,8 +45,9 @@
 
 -type response_message() :: term().
 -type response_messages() :: [response_message()].
+-type response_error() :: {error, ErrorCode :: file:posix(), response_messages()}.
 
--type request_reply() :: {ok, response_messages()} | {error, ErrorCode :: non_neg_integer(), response_messages()}.
+-type request_reply() :: {ok, response_messages()} | response_error().
 %% family() is taken by some stuff in gen_netlink
 -type family2() :: non_neg_integer() | {generic, Id :: non_neg_integer(), Name :: atom()}.
 
@@ -66,12 +67,12 @@ rtnl_request(Pid, Type, Flags, Msg) ->
 stop(Pid) ->
     gen_statem:stop(Pid). 
 
--spec(get_family(Pid :: pid(), FamilyName :: string()) -> error | {ok, family2()}).
+-spec(get_family(Pid :: pid(), FamilyName :: string()) -> response_error() | {ok, family2()}).
 get_family(Pid, FamilyName) ->
     Request = [{family_name, FamilyName}],
     case request(Pid, ?NETLINK_GENERIC, ctrl, #getfamily{request = Request}) of
-        {error, _, _} ->
-            error;
+        {error, Code, Msg} ->
+            {error, Code, Msg};
         {ok, [#netlink{msg = #newfamily{request = Response}}]} ->
             {family_id, Id} = proplists:lookup(family_id, Response),
             Family = {generic, Id, family_name_to_friendly(FamilyName)},
@@ -209,7 +210,8 @@ do_reply(#netlink{type = error, msg = {_Error = 0, _Payload}}, #state{last_rq_fr
     gen_statem:reply(From, {ok, Replies1});
 do_reply(#netlink{type = error, msg = {Error, _Payload}}, #state{last_rq_from = From, replies = Replies0}) ->
     Replies1 = lists:reverse(Replies0),
-    gen_statem:reply(From, {error, Error, Replies1});
+    ErrorCode = gen_netlink_errors:error(Error),
+    gen_statem:reply(From, {error, ErrorCode, Replies1});
 do_reply(#rtnetlink{type = done}, #state{last_rq_from = From, replies = Replies0}) ->
     Replies1 = lists:reverse(Replies0),
     gen_statem:reply(From, {ok, Replies1});
@@ -218,7 +220,8 @@ do_reply(#rtnetlink{type = error, msg = {_Error = 0, _Payload}}, #state{last_rq_
     gen_statem:reply(From, {ok, Replies1});
 do_reply(#rtnetlink{type = error, msg = {Error, _Payload}}, #state{last_rq_from = From, replies = Replies0}) ->
     Replies1 = lists:reverse(Replies0),
-    gen_statem:reply(From, {error, Error, Replies1}).
+    ErrorCode = gen_netlink_errors:error(Error),
+    gen_statem:reply(From, {error, ErrorCode, Replies1}).
 
 get_opts(Family, FamilyID, Type) ->
     [{family, Family},
