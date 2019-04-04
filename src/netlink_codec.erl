@@ -184,6 +184,26 @@
 -define(NFQNL_CFG_CMD_PF_BIND, 3).
 -define(NFQNL_CFG_CMD_PF_UNBIND, 4).
 
+-define(IPSET_CMD_NONE, 0).
+-define(IPSET_CMD_PROTOCOL, 1).
+-define(IPSET_CMD_CREATE, 2).
+-define(IPSET_CMD_DESTROY, 3).
+-define(IPSET_CMD_FLUSH, 4).
+-define(IPSET_CMD_RENAME, 5).
+-define(IPSET_CMD_SWAP, 6).
+-define(IPSET_CMD_LIST, 7).
+-define(IPSET_CMD_SAVE, 8).
+-define(IPSET_CMD_ADD, 9).
+-define(IPSET_CMD_DEL, 10).
+-define(IPSET_CMD_TEST, 11).
+-define(IPSET_CMD_HEADER, 12).
+-define(IPSET_CMD_TYPE, 13).
+-define(IPSET_CMD_RESTORE, 14).
+-define(IPSET_CMD_HELP, 15).
+-define(IPSET_CMD_VERSION, 16).
+-define(IPSET_CMD_QUIT, 17).
+-define(IPSET_CMD_COMMIT, 18).
+
 -define(NLA_F_NESTED, 16#8000).
 -define(NLA_F_NET_BYTEORDER, 16#4000).
 
@@ -232,6 +252,8 @@ decode_nl_msg_type_1(nft_compat, Type) ->
     decode_nl_msgtype_nft_compat(Type);
 decode_nl_msg_type_1(queue, Type) ->
     decode_nl_msgtype_queue(Type);
+decode_nl_msg_type_1(ipset, Type) ->
+    decode_nl_msgtype_ipset(Type);
 decode_nl_msg_type_1({netlink, gtp}, _Type) ->
     gtp;
 decode_nl_msg_type_1({netlink, ipvs}, _Type) ->
@@ -298,7 +320,9 @@ encode_nl_msg(_Protocol, nftables, Type) ->
 encode_nl_msg(_Protocol, nft_compat, Type) ->
     encode_nl_msgtype_nft_compat(Type);
 encode_nl_msg(_Protocol, queue, Type) ->
-    encode_nl_msgtype_queue(Type).
+    encode_nl_msgtype_queue(Type);
+encode_nl_msg(_Protocol, ipset, Type) ->
+    encode_nl_msgtype_ipset(Type).
 
 encode_flag(_Type, [], Value) ->
     Value;
@@ -670,6 +694,12 @@ nl_enc_payload(queue, MsgType, {Family, Version, ResId, Req}) ->
     Data = nl_enc_nla(Family, Fun, Req),
     << Fam:8, Version:8, ResId:16/native-integer, Data/binary >>;
 
+nl_enc_payload(ipset, MsgType, {Family, Version, ResId, Req}) ->
+    Fam = family(Family),
+    Fun = fun (F, KV) -> encode_ipset_attrs(F, MsgType, KV) end,
+    Data = nl_enc_nla(Family, Fun, Req),
+    << Fam:8, Version:8, ResId:16/native-integer, Data/binary >>;
+
 nl_enc_payload({netlink, generic}, _MsgType, {CtrlCmd, Version, ResId, Req}) ->
     Cmd = encode_genl_ctrl_cmd(CtrlCmd),
     Data = nl_enc_nla(CtrlCmd, fun encode_genl_ctrl_attr/2, Req),
@@ -764,6 +794,11 @@ nl_dec_payload(queue, MsgType, _Type, << Family:8, Version:8, ResId:16/native-in
               config -> fun decode_nfqnl_cfg_msg/3;
               _      -> fun decode_nfqnl_attr/3
           end,
+    { Fam, Version, ResId, nl_dec_nla(Fam, Fun, Data) };
+
+nl_dec_payload(ipset, MsgType, _Type, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+    Fam = family(Family),
+    Fun = fun (F, I, V) -> decode_ipset_attrs(F, MsgType, I, V) end,
     { Fam, Version, ResId, nl_dec_nla(Fam, Fun, Data) };
 
 nl_dec_payload({netlink, generic}, _MsgType, _Type, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->

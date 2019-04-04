@@ -28,7 +28,8 @@
     test_nft_requests/1,
     test_genl/1, test_ipvs/1,
     test_tcp_metrics_get_enc/1, test_tcp_metrics_get_rsp_dec/1,
-    test_if_nametoindex/1
+    test_if_nametoindex/1,
+    test_ipset/1
 ]).
 
 -define(equal(Expected, Actual),
@@ -620,7 +621,8 @@ all() ->
      test_nft_requests,
      test_genl, test_ipvs,
      test_tcp_metrics_get_enc, test_tcp_metrics_get_rsp_dec,
-     test_if_nametoindex
+     test_if_nametoindex,
+     test_ipset
     ].
 
 init_per_suite(Config) ->
@@ -833,3 +835,25 @@ tcp_metrics_get_rsp() -> <<92,0,0,0,24,0,2,0,18,0,0,0,107,123,0,0,1,1,0,
                            146,4,0,0,0,0,44,0,6,0,8,0,6,0,246,22,0,0,8,
                            0,1,0,5,0,0,0,8,0,7,0,100,11,0,0,8,0,2,0,2,0,
                            0,0,8,0,4,0,12,0,0,0>>.
+
+test_ipset(_Config) ->
+    AddRequest =
+        {ipset, add, [ack, request], 1554317490, 0,
+            {inet, 0, 0, [
+                {protocol, 6},
+                {setname, "dcos-l4lb"},
+                {data, [
+                    {ip, [{inet, {11, 131, 150, 79}}]},
+                    {port, 1234},
+                    {proto, tcp},
+                    {cadt_lineno, 0}
+                ]}
+            ]}
+        },
+    <<84,0,0,0,9,6,5,0,178,0,165,92,0,0,0,0,2,0,0,0,5,0,1,0,6,
+      0,0,0,14,0,2,0,100,99,111,115,45,108,52,108,98,0,0,0,40,
+      0,7,128,12,0,1,128,8,0,1,64,11,131,150,79,6,0,4,64,4,
+      210,0,0,5,0,7,0,6,0,0,0,8,0,9,64,0,0,0,0>> =
+        AddRequestBin =
+        netlink_codec:nl_ct_enc(AddRequest),
+    [AddRequest] = netlink_codec:nl_ct_dec(AddRequestBin).
