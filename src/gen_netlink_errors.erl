@@ -21,19 +21,19 @@ on_load() ->
 erl_error_code(_ErrNo) ->
     erlang:nif_error({not_loaded, [{module, ?MODULE}, {line, ?LINE}]}).
 
--spec(error(ErrNo :: non_neg_integer()) -> file:posix()).
+-spec(error(ErrNo :: non_neg_integer()) -> file:posix() | non_neg_integer()).
 error(ErrNo) ->
-    try
-        erl_error_code(ErrNo)
+    try erl_error_code(ErrNo) of
+        unknown -> ErrNo;
+        Other -> Other
     catch error:badarg ->
-        Bin = <<ErrNo:32/native-integer>>,
-        <<NegErrNo:32/big-signed-integer>> = Bin,
-        erl_error_code(-NegErrNo)
+        ErrNo
     end.
 
 -ifdef(TEST).
 
 error_test() ->
-    ?assertEqual(enodev, gen_netlink_errors:error(3992977407)).
+    ?assertEqual(enodev, gen_netlink_errors:error(19)),
+    ?assertEqual(123456, gen_netlink_errors:error(123456)).
 
 -endif.
