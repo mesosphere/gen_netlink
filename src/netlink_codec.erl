@@ -208,6 +208,7 @@
 -define(NLA_F_NET_BYTEORDER, 16#4000).
 
 -include("netlink_decoder_gen.hrl").
+-include("netlink_decoder_ipset.hrl").
 
 dec_rtm_type(RtmType) ->
     decode_rtnetlink_rtm_type(RtmType).
