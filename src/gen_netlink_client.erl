@@ -160,7 +160,13 @@ idle({call, From}, #request{subsys = SubSys, family = Family, cmd = Command, fla
     lager:debug("NLMSG Encoded: ~p ~p", [Port, Out]),
     erlang:port_command(Port, Out),
     State1 = State0#state{seq = Seq1, family = Family, last_rq_from = From, replies = [], current_seq = Seq0},
-    {next_state, wait_for_responses, State1}.
+    {next_state, wait_for_responses, State1};
+
+idle(info, {Port, {data, Data}}, #state{port = Port, family = Family}) ->
+    case netlink_codec:nl_dec(family_name(Family), Data) of
+        [#netlink{type=done}] -> keep_state_and_data;
+        Reason -> {stop, Reason}
+    end.
 
 wait_for_responses(info, {Port, {data, Data}}, #state{port = Port, family = Family}) ->
     lager:debug("Response Data: ~p ~p", [Port, Data]),
