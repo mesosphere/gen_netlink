@@ -148,7 +148,9 @@ decode_ipset_attrs_cart_data(Family, Id, Value) ->
 %% ============================
 
 decode_ipset_attrs_adt(Family, Id, Value) ->
-    decode_ipset(Family, Id, Value, []).
+    decode_ipset(Family, Id, Value, [
+        {7, data, fun decode_ipset_attrs_data/3}
+    ]).
 
 %% ============================
 
@@ -308,7 +310,9 @@ encode_ipset_attrs_cart_data(Family, {Type, Value}) ->
 %% ============================
 
 encode_ipset_attrs_adt(Family, {Type, Value}) ->
-    encode_ipset(Family, {Type, Value}, []).
+    encode_ipset(Family, {Type, Value}, [
+        {data, 7, fun encode_ipset_attrs_data/2}
+    ]).
 
 %% ============================
 
