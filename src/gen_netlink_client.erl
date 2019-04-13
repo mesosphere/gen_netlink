@@ -30,7 +30,9 @@
 
 %% API
 -export([start_link/0, start_link/1, start_link/2, start_link/3, stop/1]).
--export([request/5, request/4, get_family/2, rtnl_request/3, rtnl_request/4, if_nametoindex/1, if_nametoindex/2]).
+-export([request/6, request/5, request/4, get_family/2]).
+-export([rtnl_request/3, rtnl_request/4]).
+-export([if_nametoindex/1, if_nametoindex/2]).
 
 %% gen_statem behaviour
 -export([init/1, terminate/3, code_change/4, callback_mode/0]).
@@ -38,7 +40,7 @@
 %% State callbacks
 -export([idle/3, wait_for_responses/3, wait_for_responses_rtnl/3]).
 
--record(request, {family, cmd, flags, msg}).
+-record(request, {family, subsys, cmd, flags, msg}).
 -record(rtnl_request, {type, flags, msg}).
 
 -define(PROCKETBIN, filename:join(code:priv_dir(procket), procket)). 
@@ -55,7 +57,9 @@
 request(Pid, Family, Command, Msg) ->
     request(Pid, Family, Command, [], Msg).
 request(Pid, Family, Command, Flags, Msg) ->
-    gen_statem:call(Pid, #request{family = Family, cmd = Command, flags = Flags, msg = Msg}, 5000).
+    request(Pid, Family, netlink, Command, Flags, Msg).
+request(Pid, Family, SubSys, Command, Flags, Msg) ->
+    gen_statem:call(Pid, #request{family = Family, subsys = SubSys, cmd = Command, flags = Flags, msg = Msg}, 5000).
 
 
 -spec(rtnl_request(Pid :: pid(), Type :: atom(), Msg :: term()) -> request_reply()).
@@ -146,17 +150,23 @@ idle({call, From}, #rtnl_request{type = Type, flags = Flags0, msg = Msg},
     State1 = State0#state{seq = Seq1, last_rq_from = From, replies = [], current_seq = Seq0},
     {next_state, wait_for_responses_rtnl, State1};
 
-idle({call, From}, #request{family = Family, cmd = Command, flags = Flags0, msg = Msg},
+idle({call, From}, #request{subsys = SubSys, family = Family, cmd = Command, flags = Flags0, msg = Msg},
         State0 = #state{port = Port, pid = Pid, seq = Seq0}) ->
     Flags1 = lists:usort([ack, request] ++ Flags0),
     Seq1 = Seq0 + 1,
-    NLMsg = {netlink, Command, Flags1, Seq0, Pid, Msg},
+    NLMsg = {SubSys, Command, Flags1, Seq0, Pid, Msg},
     lager:debug("NLMSG: ~p ~p", [Port, NLMsg]),
     Out = netlink_codec:nl_enc(family_id(Family), NLMsg),
     lager:debug("NLMSG Encoded: ~p ~p", [Port, Out]),
     erlang:port_command(Port, Out),
     State1 = State0#state{seq = Seq1, family = Family, last_rq_from = From, replies = [], current_seq = Seq0},
-    {next_state, wait_for_responses, State1}.
+    {next_state, wait_for_responses, State1};
+
+idle(info, {Port, {data, Data}}, #state{port = Port, family = Family}) ->
+    case netlink_codec:nl_dec(family_name(Family), Data) of
+        [#netlink{type=done}] -> keep_state_and_data;
+        Reason -> {stop, Reason}
+    end.
 
 wait_for_responses(info, {Port, {data, Data}}, #state{port = Port, family = Family}) ->
     lager:debug("Response Data: ~p ~p", [Port, Data]),
@@ -165,12 +175,12 @@ wait_for_responses(info, {Port, {data, Data}}, #state{port = Port, family = Fami
     NextEvents = lists:map(fun(M) -> {next_event, internal, {nl_msg, M}} end, Decoded),
     {keep_state_and_data, NextEvents};
 
-wait_for_responses(internal, {nl_msg, Msg = #netlink{type = Type, seq = CurrentSeq}},
+wait_for_responses(internal, {nl_msg, Msg = {_SubSys, Type, _Flags, CurrentSeq, _Pid, _Payload}},
         State0 = #state{current_seq = CurrentSeq}) when Type == done; Type ==  error ->
     do_reply(Msg, State0),
     State1 = State0#state{last_rq_from = undefined, replies = [], current_seq = undefined},
     {next_state, idle, State1};
-wait_for_responses(internal, {nl_msg, Msg = #netlink{seq = CurrentSeq}},
+wait_for_responses(internal, {nl_msg, Msg = {_SubSys, _Type, _Flags, CurrentSeq, _Pid, _Payload}},
         State0 = #state{current_seq = CurrentSeq, replies = Replies0}) ->
     State1 = State0#state{replies = [Msg|Replies0]},
     {keep_state, State1}.

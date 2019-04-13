@@ -184,7 +184,31 @@
 -define(NFQNL_CFG_CMD_PF_BIND, 3).
 -define(NFQNL_CFG_CMD_PF_UNBIND, 4).
 
+-define(IPSET_CMD_NONE, 0).
+-define(IPSET_CMD_PROTOCOL, 1).
+-define(IPSET_CMD_CREATE, 2).
+-define(IPSET_CMD_DESTROY, 3).
+-define(IPSET_CMD_FLUSH, 4).
+-define(IPSET_CMD_RENAME, 5).
+-define(IPSET_CMD_SWAP, 6).
+-define(IPSET_CMD_LIST, 7).
+-define(IPSET_CMD_SAVE, 8).
+-define(IPSET_CMD_ADD, 9).
+-define(IPSET_CMD_DEL, 10).
+-define(IPSET_CMD_TEST, 11).
+-define(IPSET_CMD_HEADER, 12).
+-define(IPSET_CMD_TYPE, 13).
+-define(IPSET_CMD_RESTORE, 14).
+-define(IPSET_CMD_HELP, 15).
+-define(IPSET_CMD_VERSION, 16).
+-define(IPSET_CMD_QUIT, 17).
+-define(IPSET_CMD_COMMIT, 18).
+
+-define(NLA_F_NESTED, 16#8000).
+-define(NLA_F_NET_BYTEORDER, 16#4000).
+
 -include("netlink_decoder_gen.hrl").
+-include("netlink_decoder_ipset.hrl").
 
 dec_rtm_type(RtmType) ->
     decode_rtnetlink_rtm_type(RtmType).
@@ -229,6 +253,8 @@ decode_nl_msg_type_1(nft_compat, Type) ->
     decode_nl_msgtype_nft_compat(Type);
 decode_nl_msg_type_1(queue, Type) ->
     decode_nl_msgtype_queue(Type);
+decode_nl_msg_type_1(ipset, Type) ->
+    decode_nl_msgtype_ipset(Type);
 decode_nl_msg_type_1({netlink, gtp}, _Type) ->
     gtp;
 decode_nl_msg_type_1({netlink, ipvs}, _Type) ->
@@ -295,7 +321,9 @@ encode_nl_msg(_Protocol, nftables, Type) ->
 encode_nl_msg(_Protocol, nft_compat, Type) ->
     encode_nl_msgtype_nft_compat(Type);
 encode_nl_msg(_Protocol, queue, Type) ->
-    encode_nl_msgtype_queue(Type).
+    encode_nl_msgtype_queue(Type);
+encode_nl_msg(_Protocol, ipset, Type) ->
+    encode_nl_msgtype_ipset(Type).
 
 encode_flag(_Type, [], Value) ->
     Value;
@@ -667,6 +695,12 @@ nl_enc_payload(queue, MsgType, {Family, Version, ResId, Req}) ->
     Data = nl_enc_nla(Family, Fun, Req),
     << Fam:8, Version:8, ResId:16/native-integer, Data/binary >>;
 
+nl_enc_payload(ipset, MsgType, {Family, Version, ResId, Req}) ->
+    Fam = family(Family),
+    Fun = fun (F, KV) -> encode_ipset_attrs(F, MsgType, KV) end,
+    Data = nl_enc_nla(Family, Fun, Req),
+    << Fam:8, Version:8, ResId:16/native-integer, Data/binary >>;
+
 nl_enc_payload({netlink, generic}, _MsgType, {CtrlCmd, Version, ResId, Req}) ->
     Cmd = encode_genl_ctrl_cmd(CtrlCmd),
     Data = nl_enc_nla(CtrlCmd, fun encode_genl_ctrl_attr/2, Req),
@@ -692,52 +726,58 @@ nl_enc_payload(_, _, Data)
     when is_binary(Data) ->
     Data.
 
-nl_dec_payload(_Type, done, << Length:32/native-integer >>) ->
+nl_dec_payload(_Type, done, Type, <<Length:32/native-integer>>) when Type band ?NLA_F_NET_BYTEORDER =:= 0 ->
+    Length;
+
+nl_dec_payload(_Type, done, _Type, <<Length:32>>) ->
     Length;
 
 %% Error
-nl_dec_payload(_Type, error, <<Error:32, Msg/binary>>) ->
+nl_dec_payload(_Type, error, Type, <<Error:32/native-signed-integer, Msg/binary>>) when Type band ?NLA_F_NET_BYTEORDER =:= 0 ->
+    {erlang:abs(Error), Msg};
+
+nl_dec_payload(_Type, error, _Type, <<Error:32, Msg/binary>>) ->
     {Error, Msg};
 
-nl_dec_payload(ctnetlink, _MsgType, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+nl_dec_payload(ctnetlink, _MsgType, _Type, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     Fam = family(Family),
     { Fam, Version, ResId, nl_dec_nla(Fam, fun decode_ctnetlink/3, Data) };
 
-nl_dec_payload(ctnetlink_exp, _MsgType, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+nl_dec_payload(ctnetlink_exp, _MsgType, _Type, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     Fam = family(Family),
     { Fam, Version, ResId, nl_dec_nla(Fam, fun decode_ctnetlink_exp/3, Data) };
 
-nl_dec_payload(rtnetlink, MsgType, << Family:8, _Pad1:8, _Pad2:16, IfIndex:32/native-signed-integer, State:16/native-integer, Flags:8, NdmType:8, Data/binary >>)
+nl_dec_payload(rtnetlink, MsgType, _Type, << Family:8, _Pad1:8, _Pad2:16, IfIndex:32/native-signed-integer, State:16/native-integer, Flags:8, NdmType:8, Data/binary >>)
     when MsgType == getneigh; MsgType == newneigh; MsgType == delneigh ->
     Fam = family(Family),
     { Fam, IfIndex, State, Flags, NdmType, nl_dec_nla(Fam, fun decode_rtnetlink_neigh/3, Data) };
 
-nl_dec_payload(rtnetlink, MsgType, << Family:8, DstLen:8, SrcLen:8, Tos:8, Table:8, Protocol:8, Scope:8, RtmType:8, Flags:32/native-integer, Data/binary >>)
+nl_dec_payload(rtnetlink, MsgType, _Type, << Family:8, DstLen:8, SrcLen:8, Tos:8, Table:8, Protocol:8, Scope:8, RtmType:8, Flags:32/native-integer, Data/binary >>)
     when MsgType == newroute; MsgType == delroute; MsgType == getroute ->
     Fam = family(Family),
     { Fam, DstLen, SrcLen, Tos, dec_rtm_table(Table), dec_rtm_protocol(Protocol), dec_rtm_scope(Scope), dec_rtm_type(RtmType), decode_rtnetlink_rtm_flags(Flags), nl_dec_nla(Fam, fun decode_rtnetlink_route/3, Data) };
 
-nl_dec_payload(rtnetlink, MsgType, << Family:8, PrefixLen:8, Flags:8, Scope:8, Index:32/native-integer, Data/binary >>)
+nl_dec_payload(rtnetlink, MsgType, _Type, << Family:8, PrefixLen:8, Flags:8, Scope:8, Index:32/native-integer, Data/binary >>)
     when MsgType == newaddr; MsgType == deladdr ->
     Fam = family(Family),
     { Fam, PrefixLen, Flags, Scope, Index, nl_dec_nla(Fam, fun decode_rtnetlink_addr/3, Data) };
 
-nl_dec_payload(rtnetlink, MsgType, << Family:8, _Pad:8, Type:16/native-integer, Index:32/native-integer, Flags:32/native-integer, Change:32/native-integer, Data/binary >>)
+nl_dec_payload(rtnetlink, MsgType, _Type, << Family:8, _Pad:8, Type:16/native-integer, Index:32/native-integer, Flags:32/native-integer, Change:32/native-integer, Data/binary >>)
     when MsgType == newlink; MsgType == dellink; MsgType == getlink->
     Fam = family(Family),
     { Fam, arphdr(Type), Index, decode_iff_flags(Flags), decode_iff_flags(Change), nl_dec_nla(Fam, fun decode_rtnetlink_link/3, Data) };
 
-nl_dec_payload(rtnetlink, MsgType, << Family:8, _Pad1:8, _Pad2:16, IfIndex:32/native-signed-integer, PfxType:8, PfxLen:8, Flags:8, _Pad3:8, Data/binary >>)
+nl_dec_payload(rtnetlink, MsgType, _Type, << Family:8, _Pad1:8, _Pad2:16, IfIndex:32/native-signed-integer, PfxType:8, PfxLen:8, Flags:8, _Pad3:8, Data/binary >>)
     when MsgType == newprefix; MsgType == delprefix ->
     Fam = family(Family),
     { Fam, IfIndex, PfxType, PfxLen, Flags, nl_dec_nla(Fam, fun decode_rtnetlink_prefix/3, Data) };
 %% struct rtmsg
-nl_dec_payload(rtnetlink, MsgType, << Family:8, DstLen:8, SrcLen:8, Tos:8, Table:8, Protocol:8, Scope:8, RtmType:8, Flags:32/native-integer, Data/binary >> )
+nl_dec_payload(rtnetlink, MsgType, _Type, << Family:8, DstLen:8, SrcLen:8, Tos:8, Table:8, Protocol:8, Scope:8, RtmType:8, Flags:32/native-integer, Data/binary >> )
     when MsgType == newrule; MsgType == delrule; MsgType == getrule ->
     Fam = family(Family),
     { Fam, DstLen, SrcLen, Tos, dec_rtm_table(Table), dec_rtm_protocol(Protocol), dec_rtm_scope(Scope), dec_rtm_type(RtmType), decode_rtnetlink_rtm_flags(Flags), nl_dec_nla(Fam, fun decode_rtnetlink_rule/3, Data) };
 
-nl_dec_payload(nftables, MsgType, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+nl_dec_payload(nftables, MsgType, _Type, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     Fam = family(Family),
     Fun = case MsgType of
               _ when MsgType == newtable;   MsgType == gettable;   MsgType == deltable   -> fun decode_nft_table_attributes/3;
@@ -749,7 +789,7 @@ nl_dec_payload(nftables, MsgType, << Family:8, Version:8, ResId:16/native-intege
           end,
     { Fam, Version, ResId, nl_dec_nla(Fam, Fun, Data) };
 
-nl_dec_payload(queue, MsgType, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+nl_dec_payload(queue, MsgType, _Type, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     Fam = family(Family),
     Fun = case MsgType of
               config -> fun decode_nfqnl_cfg_msg/3;
@@ -757,21 +797,28 @@ nl_dec_payload(queue, MsgType, << Family:8, Version:8, ResId:16/native-integer, 
           end,
     { Fam, Version, ResId, nl_dec_nla(Fam, Fun, Data) };
 
-nl_dec_payload({netlink, generic}, _MsgType, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+nl_dec_payload(ipset, MsgType, _Type, << Family:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+    Fam = family(Family),
+    Fun = fun (F, I, V) -> decode_ipset_attrs(F, MsgType, I, V) end,
+    { Fam, Version, ResId, nl_dec_nla(Fam, Fun, Data) };
+
+nl_dec_payload({netlink, generic}, _MsgType, _Type, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     CtrlCmd = decode_genl_ctrl_cmd(Cmd),
     { CtrlCmd, Version, ResId, nl_dec_nla(CtrlCmd, fun decode_genl_ctrl_attr/3, Data) };
 
-nl_dec_payload({netlink, gtp}, _MsgType, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+nl_dec_payload({netlink, gtp}, _MsgType, _Type, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     GtpCmd = decode_gtp_cmd(Cmd),
     { GtpCmd, Version, ResId, nl_dec_nla(GtpCmd, fun decode_gtp_attrs/3, Data) };
 
-nl_dec_payload({netlink, ipvs}, _MsgType, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+nl_dec_payload({netlink, ipvs}, _MsgType, _Type, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     IPVSCmd = decode_ipvs_cmd(Cmd),
     { IPVSCmd, Version, ResId, nl_dec_nla(IPVSCmd, fun decode_ipvs_attrs/3, Data) };
-nl_dec_payload({netlink, tcp_metrics}, _MsgType, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
+
+nl_dec_payload({netlink, tcp_metrics}, _MsgType, _Type, << Cmd:8, Version:8, ResId:16/native-integer, Data/binary >>) ->
     TCPMCmd = decode_tcp_metrics_cmd(Cmd),
     { TCPMCmd, Version, ResId, nl_dec_nla(TCPMCmd, fun decode_tcp_metrics_attrs/3, Data) };
-nl_dec_payload(_SubSys, _MsgType, Data) ->
+
+nl_dec_payload(_SubSys, _MsgType, _Type, Data) ->
     io:format("unknown SubSys/MsgType: ~p/~p~n", [_SubSys, _MsgType]),
     lager:warning("unknown SubSys/MsgType: ~p/~p", [_SubSys, _MsgType]),
     Data.
@@ -806,7 +853,7 @@ nl_ct_dec(Protocol, << Len:32/native-integer, Type:16/native-integer, Flags:16/n
                                              decode_nl_msg_type(SubSys0, Other)
                                      end,
                                  Flags0 = decode_nlm_flags(MsgType, Flags),
-                                 {{ SubSys0, MsgType, Flags0, Seq, Pid, nl_dec_payload(SubSys1, MsgType, PayLoad) }, NextMsg};
+                                 {{ SubSys0, MsgType, Flags0, Seq, Pid, nl_dec_payload(SubSys1, MsgType, Type, PayLoad) }, NextMsg};
                              _ ->
                                  {{ error, format }, << >>}
                          end,
@@ -844,7 +891,7 @@ nl_rt_dec(Protocol, << Len:32/native-integer, Type:16/native-integer, Flags:16/n
                                          {RtMsg#rtnetlink{msg = [InfoMsg | nl_dec_nla(IfiFam, fun decode_rtnetlink_link/3, Filter)]}, NextMsg};
 
                                      _ ->
-                                         {RtMsg#rtnetlink{msg = nl_dec_payload(rtnetlink, MsgType, PayLoad)}, NextMsg}
+                                         {RtMsg#rtnetlink{msg = nl_dec_payload(rtnetlink, MsgType, Type, PayLoad)}, NextMsg}
                                  end;
 
                              _ ->
