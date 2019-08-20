@@ -14,6 +14,8 @@
 -export([family_to_int/1, family_to_atom/1, protocol_to_int/1, protocol_to_atom/1]).
 -endif.
 
+-include_lib("kernel/include/logger.hrl").
+
 -include("gen_netlink.hrl").
 -include("gen_netlink_shared.hrl").
 -include("netlink.hrl").
@@ -286,13 +288,13 @@ encode_rtnetlink_rtm_flags(Flags) ->
 encode_rtnetlink_link_protinfo(inet6, Value) ->
     encode_rtnetlink_link_protinfo_inet6(inet6, Value);
 encode_rtnetlink_link_protinfo(Family, Value) ->
-    lager:error("encode_rtnetlink_link_protinfo: ~p~n", {Family, Value}).
+    ?LOG_ERROR("encode_rtnetlink_link_protinfo: ~p", {Family, Value}).
 
 encode_ctnetlink_protoinfo_dccp(Family, Value) ->
-    lager:error("encode_ctnetlink: ~p~n", {Family, Value}).
+    ?LOG_ERROR("encode_ctnetlink: ~p", {Family, Value}).
 
 encode_ctnetlink_protoinfo_sctp(Family, Value) ->
-    lager:error("encode_ctnetlink_protoinfo_sctp: ~p~n", {Family, Value}).
+    ?LOG_ERROR("encode_ctnetlink_protoinfo_sctp: ~p", {Family, Value}).
 
 encode_nl_msg(netfilter, netlink, Type) ->
     encode_nl_msgtype_nfnl(Type);
@@ -338,7 +340,7 @@ encode_flag(Type, [Flag|Next], Value) when is_atom(Flag) ->
     end.
 
 encode_flag(Type, Flag) ->
-    lager:debug("encode_flag: ~p, ~p~n", [Type, Flag]),
+    ?LOG_DEBUG("encode_flag: ~p, ~p", [Type, Flag]),
     encode_flag(Type, Flag, 0).
 
 
@@ -386,19 +388,19 @@ encode_huint64(NlaType, Val) ->
     enc_nla(NlaType, <<Val:64/native-integer>>).
 
 %% encode_int8(NlaType, Val) ->
-%% 	enc_nla(NlaType, <<Val:8/signed-integer>>).
+%%      enc_nla(NlaType, <<Val:8/signed-integer>>).
 %% encode_int16(NlaType, Val) ->
-%% 	enc_nla(NlaType, <<Val:16/signed-integer>>).
+%%      enc_nla(NlaType, <<Val:16/signed-integer>>).
 encode_int32(NlaType, Val) ->
     enc_nla(NlaType, <<Val:32/signed-integer>>).
 %% encode_int64(NlaType, Val) ->
-%% 	enc_nla(NlaType, <<Val:64/signed-integer >>).
+%%      enc_nla(NlaType, <<Val:64/signed-integer >>).
 %% encode_hint16(NlaType, Val) ->
-%% 	enc_nla(NlaType, <<Val:16/native-signed-integer>>).
+%%      enc_nla(NlaType, <<Val:16/native-signed-integer>>).
 %% encode_hint32(NlaType, Val) ->
-%% 	enc_nla(NlaType, <<Val:32/native-signed-integer>>).
+%%      enc_nla(NlaType, <<Val:32/native-signed-integer>>).
 %% encode_hint64(NlaType, Val) ->
-%% 	enc_nla(NlaType, <<Val:64/native-signed-integer>>).
+%%      enc_nla(NlaType, <<Val:64/native-signed-integer>>).
 
 encode_protocol(NlaType, Proto) ->
     enc_nla(NlaType, <<(protocol(Proto)):8>>).
@@ -576,7 +578,7 @@ nl_dec_nla(Family, Fun, << Len:16/native-integer, NlaType:16/native-integer, Res
                 {<<>>, Fun(Family, NlaType band 16#7FFF, Data)};
 
             _ ->
-                lager:warning("nl_dec_nla: unable to decode pay load of ~p", [RawNla]),
+                ?LOG_WARNING("nl_dec_nla: unable to decode pay load of ~p", [RawNla]),
                 {<<>>, {rawdata, RawNla}}
         end,
     nl_dec_nla(Family, Fun, Next, [NLA | Acc]);
@@ -589,11 +591,11 @@ nl_dec_nla(Family, Fun, Data) ->
 nl_enc_nla(_Family, _Fun, [], _Context, Acc) ->
     list_to_binary(lists:reverse(Acc));
 nl_enc_nla(Family, Fun, [Head|Rest], Context, Acc) when is_function(Fun, 2) ->
-%    lager:debug("nl_enc_nla: ~w, ~w~n", [Family, Head]),
+%    ?LOG_DEBUG("nl_enc_nla: ~w, ~w", [Family, Head]),
     H = Fun(Family, Head),
     nl_enc_nla(Family, Fun, Rest, Context, [H|Acc]);
 nl_enc_nla(Family, Fun, [Head|Rest], Context, Acc) when is_function(Fun, 3) ->
-%    lager:debug("nl_enc_nla: ~w, ~w~n", [Family, Head]),
+%    ?LOG_DEBUG("nl_enc_nla: ~w, ~w", [Family, Head]),
     H = Fun(Family, Head, Context),
     nl_enc_nla(Family, Fun, Rest, [Head|Context], [H|Acc]).
 
@@ -625,8 +627,8 @@ nl_enc_payload(rtnetlink, MsgType, {Family, PrefixLen, Flags, Scope, Index, Req}
 nl_enc_payload(rtnetlink, MsgType, {Family, DstLen, SrcLen, Tos, Table, Protocol, Scope, RtmType, Flags, Req})
     when MsgType == newroute; MsgType == delroute ; MsgType == getroute ->
     Fam = family(Family),
-    lager:debug("nl_enc_payload: ~p~n", [{Family, DstLen, SrcLen, Tos, Table, Protocol, Scope, RtmType, Flags, Req}]),
-    lager:debug("~p, ~p, ~p, ~p, ~p~n", [encode_rtnetlink_rtm_table(Table),
+    ?LOG_DEBUG("nl_enc_payload: ~p", [{Family, DstLen, SrcLen, Tos, Table, Protocol, Scope, RtmType, Flags, Req}]),
+    ?LOG_DEBUG("~p, ~p, ~p, ~p, ~p", [encode_rtnetlink_rtm_table(Table),
         encode_rtnetlink_rtm_protocol(Protocol),
         encode_rtnetlink_rtm_scope(Scope),
         encode_rtnetlink_rtm_type(RtmType),
@@ -643,8 +645,8 @@ nl_enc_payload(rtnetlink, MsgType, {Family, DstLen, SrcLen, Tos, Table, Protocol
 nl_enc_payload(rtnetlink, MsgType, {Family, DstLen, SrcLen, Tos, Table, Protocol, Scope, RtmType, Flags, Req})
     when MsgType == newrule; MsgType == delrule; MsgType == getrule->
     Fam = family(Family),
-    lager:debug("nl_enc_payload: ~p~n", [{Family, DstLen, SrcLen, Tos, Table, Protocol, Scope, RtmType, Flags, Req}]),
-    lager:debug("~p, ~p, ~p, ~p, ~p~n", [encode_rtnetlink_rtm_table(Table),
+    ?LOG_DEBUG("nl_enc_payload: ~p", [{Family, DstLen, SrcLen, Tos, Table, Protocol, Scope, RtmType, Flags, Req}]),
+    ?LOG_DEBUG("~p, ~p, ~p, ~p, ~p", [encode_rtnetlink_rtm_table(Table),
         encode_rtnetlink_rtm_protocol(Protocol),
         encode_rtnetlink_rtm_scope(Scope),
         encode_rtnetlink_rtm_type(RtmType),
@@ -820,7 +822,7 @@ nl_dec_payload({netlink, tcp_metrics}, _MsgType, _Type, << Cmd:8, Version:8, Res
 
 nl_dec_payload(_SubSys, _MsgType, _Type, Data) ->
     io:format("unknown SubSys/MsgType: ~p/~p~n", [_SubSys, _MsgType]),
-    lager:warning("unknown SubSys/MsgType: ~p/~p", [_SubSys, _MsgType]),
+    ?LOG_WARNING("unknown SubSys/MsgType: ~p/~p", [_SubSys, _MsgType]),
     Data.
 
 nlmsg_ok(DataLen, MsgLen) ->

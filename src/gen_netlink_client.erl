@@ -10,8 +10,10 @@
 -author("sdhillon").
 
 -behavior(gen_statem).
--include_lib("gen_netlink/include/netlink.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 -include_lib("procket/include/packet.hrl").
+-include_lib("gen_netlink/include/netlink.hrl").
 
 -record(state, {
     port                :: port(),
@@ -43,7 +45,7 @@
 -record(request, {family, subsys, cmd, flags, msg}).
 -record(rtnl_request, {type, flags, msg}).
 
--define(PROCKETBIN, filename:join(code:priv_dir(procket), procket)). 
+-define(PROCKETBIN, filename:join(code:priv_dir(procket), procket)).
 
 -type response_message() :: term().
 -type response_messages() :: [response_message()].
@@ -69,7 +71,7 @@ rtnl_request(Pid, Type, Flags, Msg) ->
     gen_statem:call(Pid, #rtnl_request{type = Type, flags = Flags, msg = Msg}, 5000).
 
 stop(Pid) ->
-    gen_statem:stop(Pid). 
+    gen_statem:stop(Pid).
 
 -spec(get_family(Pid :: pid(), FamilyName :: string()) -> response_error() | {ok, family2()}).
 get_family(Pid, FamilyName) ->
@@ -101,7 +103,7 @@ if_nametoindex2(Ifname, Opts) ->
     try packet:ifindex(Fd, Ifname) of
         Idx when is_integer(Idx) andalso Idx >= 0 ->
             {ok, Idx}
-    catch 
+    catch
         Exception:Reason ->
             {error, {Exception, Reason}}
     after
@@ -143,9 +145,9 @@ idle({call, From}, #rtnl_request{type = Type, flags = Flags0, msg = Msg},
     Flags1 = lists:usort([request, ack] ++ Flags0),
     Seq1 = Seq0 + 1,
     NLMsg = #rtnetlink{type = Type, flags = Flags1, seq = Seq0, pid = Pid, msg = Msg},
-    lager:debug("NLMSG: ~p ~p", [Port, NLMsg]),
+    ?LOG_DEBUG("NLMSG: ~p ~p", [Port, NLMsg]),
     Out = netlink_codec:nl_enc(family_id(Family), NLMsg),
-    lager:debug("NLMSG Encoded: ~p ~p", [Port, Out]),
+    ?LOG_DEBUG("NLMSG Encoded: ~p ~p", [Port, Out]),
     erlang:port_command(Port, Out),
     State1 = State0#state{seq = Seq1, last_rq_from = From, replies = [], current_seq = Seq0},
     {next_state, wait_for_responses_rtnl, State1};
@@ -155,9 +157,9 @@ idle({call, From}, #request{subsys = SubSys, family = Family, cmd = Command, fla
     Flags1 = lists:usort([ack, request] ++ Flags0),
     Seq1 = Seq0 + 1,
     NLMsg = {SubSys, Command, Flags1, Seq0, Pid, Msg},
-    lager:debug("NLMSG: ~p ~p", [Port, NLMsg]),
+    ?LOG_DEBUG("NLMSG: ~p ~p", [Port, NLMsg]),
     Out = netlink_codec:nl_enc(family_id(Family), NLMsg),
-    lager:debug("NLMSG Encoded: ~p ~p", [Port, Out]),
+    ?LOG_DEBUG("NLMSG Encoded: ~p ~p", [Port, Out]),
     erlang:port_command(Port, Out),
     State1 = State0#state{seq = Seq1, family = Family, last_rq_from = From, replies = [], current_seq = Seq0},
     {next_state, wait_for_responses, State1};
@@ -169,9 +171,9 @@ idle(info, {Port, {data, Data}}, #state{port = Port, family = Family}) ->
     end.
 
 wait_for_responses(info, {Port, {data, Data}}, #state{port = Port, family = Family}) ->
-    lager:debug("Response Data: ~p ~p", [Port, Data]),
+    ?LOG_DEBUG("Response Data: ~p ~p", [Port, Data]),
     Decoded = netlink_codec:nl_dec(family_name(Family), Data),
-    lager:debug("Decoded: ~p", [Decoded]),
+    ?LOG_DEBUG("Decoded: ~p", [Decoded]),
     NextEvents = lists:map(fun(M) -> {next_event, internal, {nl_msg, M}} end, Decoded),
     {keep_state_and_data, NextEvents};
 
@@ -189,10 +191,10 @@ wait_for_responses(internal, {nl_msg, Msg = {_SubSys, _Type, _Flags, CurrentSeq,
 
 
 wait_for_responses_rtnl(info, {Port, {data, Data}}, #state{port = Port, family = Family}) ->
-    lager:debug("Response Data: ~p ~p", [Port, Data]),
+    ?LOG_DEBUG("Response Data: ~p ~p", [Port, Data]),
     Decoded = netlink_codec:nl_dec(family_name(Family), Data),
     NextEvents0 = lists:map(fun(M) -> {next_event, internal, {nl_msg, M}} end, Decoded),
-    lager:debug("Decoded: ~p", [Decoded]),
+    ?LOG_DEBUG("Decoded: ~p", [Decoded]),
     {keep_state_and_data, NextEvents0};
 wait_for_responses_rtnl(internal, {nl_msg, Msg = #rtnetlink{type = Type, seq = CurrentSeq}},
     State0 = #state{current_seq = CurrentSeq}) when Type == done; Type == error ->
@@ -242,7 +244,7 @@ get_opts(Family, FamilyID, Type, Netns) ->
     [{family, Family},
      {protocol, FamilyID},
      {type, Type},
-     {progname, "nsenter -n" ++ Netns ++ " " ++ ?PROCKETBIN}].    
+     {progname, "nsenter -n" ++ Netns ++ " " ++ ?PROCKETBIN}].
 
 %% Returns ID, if generic family
 family_id({generic, Id, _Name}) ->
@@ -256,7 +258,7 @@ family_name(Family) ->
     Family.
 
 terminate(Reason, State, Data) ->
-    lager:warning("Terminating, due to: ~p, in state: ~p, with state data: ~p", [Reason, State, Data]).
+    ?LOG_WARNING("Terminating, due to: ~p, in state: ~p, with state data: ~p", [Reason, State, Data]).
 
 code_change(_OldVsn, OldState, OldData, _Extra) ->
     {ok, OldState, OldData}.

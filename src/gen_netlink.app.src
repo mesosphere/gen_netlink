@@ -3,7 +3,6 @@
     {vsn, "0.3"},
     {modules, []},
     {registered, []},
-    {applications, [kernel, stdlib, lager, procket]},
+    {applications, [kernel, stdlib, procket]},
     {env, []}
 ]}.
-
