@@ -1,3 +1,5 @@
-*.[oa]
-*.beam
+_build/
 /priv/*.so
+*.[ado]
+*.beam
+TEST-*.xml

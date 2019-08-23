@@ -92,97 +92,97 @@
         }).
 
 -record(rtnetlink, {
-		  type          ::atom(),
-		  flags         ::nl_flags(),
-		  seq           ::non_neg_integer(),
-		  pid           ::non_neg_integer(),
-		  msg           ::rtnetlink_msg()
-		 }).
+                  type          ::atom(),
+                  flags         ::nl_flags(),
+                  seq           ::non_neg_integer(),
+                  pid           ::non_neg_integer(),
+                  msg           ::rtnetlink_msg()
+                 }).
 
 -record(ctnetlink, {
-		  type          ::'new'|'get'|'delete'|'get_ctrzero',
-		  flags         ::nl_flags(),
-		  seq           ::non_neg_integer(),
-		  pid           ::non_neg_integer(),
-		  msg           ::ctnetlink_msg()
-		 }).
+                  type          ::'new'|'get'|'delete'|'get_ctrzero',
+                  flags         ::nl_flags(),
+                  seq           ::non_neg_integer(),
+                  pid           ::non_neg_integer(),
+                  msg           ::ctnetlink_msg()
+                 }).
 
 -record(ctnetlink_exp, {
-		  type          ::'new'|'get'|'delete'|'get_ctrzero',
-		  flags         ::nl_flags(),
-		  seq           ::non_neg_integer(),
-		  pid           ::non_neg_integer(),
-		  msg           ::ctnetlink_msg()
-		 }).
+                  type          ::'new'|'get'|'delete'|'get_ctrzero',
+                  flags         ::nl_flags(),
+                  seq           ::non_neg_integer(),
+                  pid           ::non_neg_integer(),
+                  msg           ::ctnetlink_msg()
+                 }).
 
 -record(nftables, {
-		  type          ::atom(),
-		  flags         ::nl_flags(),
-		  seq           ::non_neg_integer(),
-		  pid           ::non_neg_integer(),
-		  msg           ::rtnetlink_msg()
-		 }).
+                  type          ::atom(),
+                  flags         ::nl_flags(),
+                  seq           ::non_neg_integer(),
+                  pid           ::non_neg_integer(),
+                  msg           ::rtnetlink_msg()
+                 }).
 
 -record(nda_cacheinfo, {
-	  confirmed :: integer(),
-	  used      :: integer(),
-	  updated   :: integer(),
-	  refcnt    :: integer()
-	 }).
+          confirmed :: integer(),
+          used      :: integer(),
+          updated   :: integer(),
+          refcnt    :: integer()
+         }).
 
 -record(ifa_cacheinfo, {
-	  prefered :: integer(),
-	  valid    :: integer(),
-	  cstamp   :: integer(),             %% created timestamp, hundredths of seconds
-	  tstamp   :: integer()              %% updated timestamp, hundredths of seconds
-	 }).
+          prefered :: integer(),
+          valid    :: integer(),
+          cstamp   :: integer(),             %% created timestamp, hundredths of seconds
+          tstamp   :: integer()              %% updated timestamp, hundredths of seconds
+         }).
 
 -record(ifla_cacheinfo, {
-	  max_reasm_len  :: integer(),
-	  tstamp         :: integer(),       %% ipv6InterfaceTable updated timestamp
-	  reachable_time :: integer(),
-	  retrans_time   :: integer()
-	 }).
+          max_reasm_len  :: integer(),
+          tstamp         :: integer(),       %% ipv6InterfaceTable updated timestamp
+          reachable_time :: integer(),
+          retrans_time   :: integer()
+         }).
 
 -record(rta_cacheinfo, {
-	  rta_clntref :: integer(),
-	  rta_lastuse :: integer(),
-	  rta_expires :: integer(),
-	  rta_error   :: integer(),
-	  rta_used    :: integer(),
-	  rta_id      :: integer(),
-	  rta_ts      :: integer(),
-	  rta_tsage   :: integer()
-	 }).
+          rta_clntref :: integer(),
+          rta_lastuse :: integer(),
+          rta_expires :: integer(),
+          rta_error   :: integer(),
+          rta_used    :: integer(),
+          rta_id      :: integer(),
+          rta_ts      :: integer(),
+          rta_tsage   :: integer()
+         }).
 
 -record(prefix_cacheinfo, {
-	  preferred_time :: integer(),
-	  valid_time     :: integer()
-	 }).
+          preferred_time :: integer(),
+          valid_time     :: integer()
+         }).
 
 -record(neighbour_cache_entry, {
-	  key,                    %% {if_index, dst}
-	  if_index,
-	  dst,
-	  lladdr
-	 }).
+          key,                    %% {if_index, dst}
+          if_index,
+          dst,
+          lladdr
+         }).
 
 -record(route_cache_entry, {
-	  key,
-	  dst,
-	  dst_len,
-	  table,
-	  gateway,
-	  oif
-	 }).
+          key,
+          dst,
+          dst_len,
+          table,
+          gateway,
+          oif
+         }).
 
 -record(ifinfomsg, {
-	  family,
-	  type,
-	  index,
-	  flags,
-	  change
-	 }).
+          family,
+          type,
+          index,
+          flags,
+          change
+         }).
 
 -type netlink_record() :: #rtnetlink{} | #ctnetlink{} | #ctnetlink_exp{}.
 
@@ -193,12 +193,6 @@
 -type rtnetlink_ev() :: {rtnetlink, [#rtnetlink{}, ...]}.
                      %% netlink event message sent to `rt' subscriber
 
-
-%-define(LOG(Formatting, Args), lager:debug(Formatting, Args)).
--define(LOG(Formatting, Args), begin _ = Formatting, _ = Args end).
-
-%-define(LOG(Formatting), lager:debug(Formatting)).
--define(LOG(Formatting), begin _ = Formatting end).
 
 -record(getfamily, {version = 1, reserved = 0, request}).
 -record(newfamily, {version = 2, reserved = 0, request}).
