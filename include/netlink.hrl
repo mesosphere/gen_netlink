@@ -202,6 +202,7 @@
 -record(get_dest, {version = 0, reserved = 0, request}).
 -record(new_dest, {version = 0, reserved = 0, request}).
 -record(del_dest, {version = 0, reserved = 0, request}).
+-record(set_dest, {version = 0, reserved = 0, request}).
 
 
 -endif.
